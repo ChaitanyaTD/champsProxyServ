@@ -21,52 +21,62 @@ const generateSignature = (data) => {
 
 router.post('/invoice/checkout', async (req, res) => {
   try {
-    const { qty, successUrl, failedUrl, ticketId } = req.body;
+    
+    const { qty, success_url, failed_url, ticketId } = req.body;
+    const {idempotencykey} = req.headers;
+    
 
-    const payload = {
-      qty,
-      success_url: successUrl,
-      failed_url: failedUrl,
-      ticket_id: ticketId,
-    };
-
-    const signature = generateSignature(JSON.stringify(payload));
-
+    // const payload = {
+    //   qty : qty,
+    //   success_url: successUrl,
+    //   failed_url: failedUrl,
+    // };
+    // console.log(payload);
+    
+    // const signature = generateSignature(JSON.stringify(payload));
+    
     const response = await axios.post(
       `${favourseApiBaseUrl}/invoice/checkout`,
-      payload,
+      {
+        qty : qty,
+        success_url: success_url,
+        failed_url: failed_url,
+      },
       {
         headers: {
           'Content-Type': 'application/json',
-          'Signature-X': signature,
+          'champ-sign-key': process.env.KEY,
+          'Idempotency-Key' : `${idempotencykey}`
         },
       }
     );
+    console.log(response);
+    
+    
 
     const responseBody = {
       success : response.data.success,
-      invoice_url: response.data.invoice_url,
-      invoice_id: response.data.invoice_id,
+      invoice_url: response.data.data.invoice_url,
+      invoice_id: response.data.data.invoice_id,
     };
 
     res.setHeader('Content-Type', 'application/json');
     res.status(200).json(responseBody);
 
   } catch (error) {
+    console.error(error);
     console.error('Error creating checkout session:', error.response ? error.response.data : error.message);
     res.status(500).json({
-      error: {
-        code: error.response ? error.response.data.error.code : 'unknown_error',
-        message: error.response ? error.response.data.error.message : error.message,
-      },
+      error : error.response.data
     });
   }
 });
 
 router.post('/payment/status', async (req, res) => {
   try {
-    const { invoiceId } = req.body;  
-    const { signatureX } = req.headers;
+    const { invoiceId } = req.body;
+    const {idempotencykey} = req.headers;
+    // const signatureX = generateSignature(JSON.stringify({invoiceId : invoiceId}));
 
     const response = await axios.post(
       `${favourseApiBaseUrl}/status`,
@@ -74,26 +84,28 @@ router.post('/payment/status', async (req, res) => {
       {
         headers: {
           'Content-Type': 'application/json',
-          'Signature-X': signatureX,
+          'champ-sign-key': process.env.KEY,
+          'Idempotency-Key' : `${idempotencykey}`
         },
       }
     );
+    console.log(response.data); 
+    
 
     const responseBody = {
       transactionStatus: response.data.transactionStatus,  
       transactionDetails: response.data.details,
     };
+    
 
     res.setHeader('Content-Type', 'application/json');
     res.status(200).json(responseBody);
 
   } catch (error) {
+    console.error(error);
     console.error('Error retrieving transaction status:', error.response ? error.response.data : error.message);
     res.status(500).json({
-      error: {
-        code: error.response ? error.response.data.error.code : 'unknown_error',
-        message: error.response ? error.response.data.error.message : error.message,
-      },
+      error: error.response.data
     });
   }
 });
